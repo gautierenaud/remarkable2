@@ -1,0 +1,6 @@
+# IDE
+.vscode/
+
+# images (ignored by default)
+*.png
+*.svg
