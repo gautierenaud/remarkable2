@@ -1,0 +1,7 @@
+The Editor Plugin Demo
+===========================
+
+Created by Kovid Goyal
+
+Requires calibre >= 1.46.0
+
