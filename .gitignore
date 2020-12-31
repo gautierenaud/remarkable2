@@ -4,3 +4,5 @@
 # images (ignored by default)
 *.png
 *.svg
+
+venv/

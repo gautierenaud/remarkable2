@@ -1,23 +1,19 @@
-from mechanize import Request
-from logging import getLogger
+import json
 from datetime import datetime
-from typing import Union, Optional
+from logging import getLogger
+from typing import Optional, Union
 from uuid import uuid4
+
+from mechanize import Request
+
 from .collections import Collection
-from .config import load, dump
+from .config import dump, load
+from .const import (BASE_URL, DEVICE, DEVICE_TOKEN_URL, USER_AGENT,
+                    USER_TOKEN_URL, RFC3339Nano)
 from .document import Document, ZipDocument, from_request_stream
+from .exceptions import (ApiError, AuthError, DocumentNotFound,
+                         UnsupportedTypeError)
 from .folder import Folder
-from .exceptions import (
-    AuthError,
-    DocumentNotFound,
-    ApiError,
-    UnsupportedTypeError,)
-from .const import (RFC3339Nano,
-                    USER_AGENT,
-                    BASE_URL,
-                    DEVICE_TOKEN_URL,
-                    USER_TOKEN_URL,
-                    DEVICE,)
 
 log = getLogger("rmapy")
 DocumentOrFolder = Union[Document, Folder]
@@ -25,13 +21,11 @@ DocumentOrFolder = Union[Document, Folder]
 
 class Response():
     def __init__(self, r):
-        self.ok = True # if we get here it means the browser did not encounter any error (e.g. HTTP 400, etc...)
+        # if we get here it means the browser did not encounter any error (e.g. HTTP 400, etc...)
+        self.ok = True
         self.text = r.read().decode('utf-8')
         self.status_code = r.getcode()
 
-        print(self.text)
-        print(r.info())
-    
     def json(self):
         import json
         return json.loads(self.text)
@@ -101,17 +95,29 @@ class Client(object):
             _headers[k] = headers[k]
         log.debug(url, _headers)
 
+        import logging
+        import sys
+        logger = logging.getLogger("mechanize")
+        logger.addHandler(logging.StreamHandler(sys.stdout))
+        logger.setLevel(logging.DEBUG)
+
+        self.browser.set_debug_http(True)
+        self.browser.set_debug_responses(True)
+        self.browser.set_debug_redirects(True)
+
         req = Request(url,
                       method=method,
-                      data=body,
+                      data=data,
                       headers=_headers)
-
-        print(f'Request to {url}')
-        print(req.header_items())
 
         resp = self.browser.open(req)
 
-        print(f'Succeed to get to {self.browser.geturl()}')
+        # print(resp.info())
+
+        # from mechanize import _urllib2_fork
+        # urlopen = _urllib2_fork.OpenerDirector._open
+        # response = urlopen(self, req, data)
+        # print("Tralala,", response)
 
         return Response(resp)
 
@@ -138,7 +144,7 @@ class Client(object):
             "deviceDesc": DEVICE,
             "deviceID": uuid,
         }
-        response = self.request("POST", DEVICE_TOKEN_URL, body=body)
+        response = self.request("POST", DEVICE_TOKEN_URL, data=body)
         if response.ok:
             self.token_set["devicetoken"] = response.text
             dump(self.token_set)
@@ -221,13 +227,13 @@ class Client(object):
 
         log.debug(f"GETTING DOC {_id}")
         response = self.request("GET", "/document-storage/json/2/docs",
-                                params={
+                                data={
                                     "doc": _id,
                                     "withBlob": True
                                 })
-        log.debug(response.url)
         data_response = response.json()
         log.debug(data_response)
+        print("get_doc:", data_response)
 
         if len(data_response) > 0:
             if data_response[0]["Type"] == "CollectionType":
@@ -298,7 +304,8 @@ class Client(object):
         blob_url_put = self._upload_request(zip_doc)
         zip_doc.dump(zip_doc.zipfile)
         response = self.request("PUT", blob_url_put,
-                                data=zip_doc.zipfile.read())
+                                data=zip_doc.zipfile.read(),
+                                headers={"Content-Type": ""})
         # Reset seek
         zip_doc.zipfile.seek(0)
         if response.ok:
@@ -325,7 +332,8 @@ class Client(object):
         req["ModifiedClient"] = datetime.utcnow().strftime(RFC3339Nano)
         res = self.request("PUT",
                            "/document-storage/json/2/upload/update-status",
-                           body=[req])
+                           data=json.dumps([req]),
+                           headers={"Content-type": "application/json"})
 
         return self.check_response(res)
 
@@ -355,11 +363,12 @@ class Client(object):
     def _upload_request(self, zip_doc: ZipDocument) -> str:
         zip_file, req = zip_doc.create_request()
         res = self.request("PUT", "/document-storage/json/2/upload/request",
-                           body=[req])
+                           data=json.dumps([req]), headers={"Accept": "*/*"})
         if not res.ok:
             raise ApiError(
                 f"upload request failed with status {res.status_code}",
                 response=res)
+
         response = res.json()
         if len(response) > 0:
             dest = response[0].get("BlobURLPut", None)
@@ -387,7 +396,7 @@ class Client(object):
 
         zip_folder, req = folder.create_request()
         res = self.request("PUT", "/document-storage/json/2/upload/request",
-                           body=[req])
+                           data=json.dumps([req]))
         if not res.ok:
             raise ApiError(
                 f"upload request failed with status {res.status_code}",
