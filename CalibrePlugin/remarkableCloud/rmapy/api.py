@@ -55,8 +55,7 @@ class Client(object):
 
     def request(self, method: str, path: str,
                 data=None,
-                body=None, headers=None,
-                params=None, stream=False):
+                headers=None):
         """Creates a request against the Remarkable Cloud API
 
         This function automatically fills in the blanks of base
@@ -95,15 +94,15 @@ class Client(object):
             _headers[k] = headers[k]
         log.debug(url, _headers)
 
-        import logging
-        import sys
-        logger = logging.getLogger("mechanize")
-        logger.addHandler(logging.StreamHandler(sys.stdout))
-        logger.setLevel(logging.DEBUG)
+        # import logging
+        # import sys
+        # logger = logging.getLogger("mechanize")
+        # logger.addHandler(logging.StreamHandler(sys.stdout))
+        # logger.setLevel(logging.DEBUG)
 
-        self.browser.set_debug_http(True)
-        self.browser.set_debug_responses(True)
-        self.browser.set_debug_redirects(True)
+        # self.browser.set_debug_http(True)
+        # self.browser.set_debug_responses(True)
+        # self.browser.set_debug_redirects(True)
 
         req = Request(url,
                       method=method,
@@ -111,13 +110,6 @@ class Client(object):
                       headers=_headers)
 
         resp = self.browser.open(req)
-
-        # print(resp.info())
-
-        # from mechanize import _urllib2_fork
-        # urlopen = _urllib2_fork.OpenerDirector._open
-        # response = urlopen(self, req, data)
-        # print("Tralala,", response)
 
         return Response(resp)
 
@@ -233,7 +225,6 @@ class Client(object):
                                 })
         data_response = response.json()
         log.debug(data_response)
-        print("get_doc:", data_response)
 
         if len(data_response) > 0:
             if data_response[0]["Type"] == "CollectionType":
@@ -268,7 +259,7 @@ class Client(object):
                     "We expected a document, got {type}"
                     .format(type=type(doc)))
         log.debug("BLOB", document.BlobURLGet)
-        r = self.request("GET", document.BlobURLGet, stream=True)
+        r = self.request("GET", document.BlobURLGet)
         return from_request_stream(document.ID, r)
 
     def delete(self, doc: DocumentOrFolder):
@@ -281,10 +272,10 @@ class Client(object):
         """
 
         response = self.request("PUT", "/document-storage/json/2/delete",
-                                body=[{
+                                data=json.dumps([{
                                     "ID": doc.ID,
                                     "Version": doc.Version
-                                }])
+                                }]))
 
         return self.check_response(response)
 
