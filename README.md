@@ -67,3 +67,17 @@ The `iconCode` corresponds to the icon displayed on "Select template" interface.
 Only the png seems to suffice as a template. Or I might guess only one of png or svg will suffice. svg seems to be lighter than png (x2 ~ x7).
 
 The rights are `644` for all the files (owner is root).
+
+# Calibre plugin
+
+Had to rewrite call to requests with mechanize's implementation, since the python interpreter seems to be an integrated one I could not use any external dependency.
+
+## TODOs for plugin
+
+* move api calls to worker script, so I don't block the interface
+* remember a correspondance of the files on the remarkable, i.e. put the id of the remarkable file in calibre's metadata (and version)
+* don't push the same book twice
+* check version of remarkable file, pull changes if there are any changes (e.g. notes on the files)
+* create a column/icon to show which books are on remarkable/under upload/under upload
+* take in account a default location (e.g. Books/book_to_upload)
+* pull remarkable created files ? such as notes (con: they are not books, so technically nothing to do in calibre)

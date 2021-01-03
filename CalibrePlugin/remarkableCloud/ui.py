@@ -3,7 +3,7 @@
 __license__ = 'GPL v3'
 __copyright__ = '2020, Renaud Tamon Gautier <gautierenaud at gmail.com>'
 
-from calibre.gui2 import error_dialog
+from calibre.gui2 import Dispatcher, error_dialog
 from calibre.gui2.actions import InterfaceAction
 from PyQt5.Qt import QDialog, QLabel, QMessageBox, QPushButton, QVBoxLayout
 
@@ -36,10 +36,8 @@ class rMCloudPlugin(InterfaceAction):
         return set(map(self.gui.library_view.model().id, rows))
 
     def list_documents(self):
-        from calibre_plugins.remarkable_cloud.rmapy.api import Client
-        from calibre_plugins.remarkable_cloud.rmapy.document import ZipDocument
-        rm_client = Client()
-        rm_client.renew_token()
+        from calibre_plugins.remarkable_cloud.jobs import update_token, upload_book
+        update_token()
 
         db = self.gui.current_db.new_api
 
@@ -51,9 +49,6 @@ class rMCloudPlugin(InterfaceAction):
             elif 'PDF' in formats:
                 fmt = 'PDF'
             else:
-                raise IncompatibleFormatError(('EPUB','PDF'), formats)
+                raise IncompatibleFormatError(('EPUB', 'PDF'), formats)
 
-            file_path = db.format_abspath(id, fmt)
-            zip_doc = ZipDocument(doc=file_path)
-            res = rm_client.upload(zip_doc)
-            print(res)
+            upload_book(self, id, fmt, db)
