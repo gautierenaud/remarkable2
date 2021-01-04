@@ -11,7 +11,7 @@ def update_token():
 
 def get_upload_books_job(books, db):
     return ThreadedJob('remarkablecloud', 'Upload files to reMarkable Cloud',
-                      upload_books, (books, db), {}, None)
+                       upload_books, (books, db), {}, None)
 
 
 def upload_books(books, db, log=None, abort=None, notifications=True):
@@ -20,4 +20,5 @@ def upload_books(books, db, log=None, abort=None, notifications=True):
     for book_id, fmt in books:
         file_path = db.format_abspath(book_id, fmt)
         zip_doc = ZipDocument(doc=file_path)
-        res = rm_client.upload(zip_doc)
+        rm_client.upload(zip_doc)
+        print(zip_doc.ID)

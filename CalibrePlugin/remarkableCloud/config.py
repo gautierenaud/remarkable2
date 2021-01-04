@@ -1,11 +1,19 @@
 __license__ = 'GPL v3'
 __copyright__ = '2020, Renaud Tamon Gautier <gautierenaud at gmail.com>'
 
-from PyQt5.Qt import QWidget, QVBoxLayout, QLabel, QLineEdit
-from calibre_plugins.remarkable_cloud.rmapy.config import config
+from calibre.utils.config import JSONConfig
+from PyQt5.Qt import QLabel, QLineEdit, QVBoxLayout, QWidget
 
-if not 'book_dir' in config:
-    config['book_dir'] = ''
+config = JSONConfig('plugins/remarkable_cloud')
+
+
+def load() -> dict:
+    return config
+
+
+def dump(new_config: dict) -> None:
+    global config
+    config = new_config
 
 
 class ConfigWidget(QWidget):
@@ -23,17 +31,6 @@ class ConfigWidget(QWidget):
         self.registration_code = QLineEdit(self)
         self.l.addWidget(self.registration_code)
         self.label.setBuddy(self.registration_code)
-
-        self.book_dir_label = QLabel('Book directory:')
-        self.l.addWidget(self.book_dir_label)
-
-        self.book_dir = QLineEdit(self)
-        self.book_dir.setText(config['book_dir'])
-        self.l.addWidget(self.book_dir)
-        self.book_dir_label.setBuddy(self.book_dir)
-
-    def save_settings(self):
-        config['book_dir'] = self.book_dir.text()
 
     def validate(self):
         if self.registration_code.text():

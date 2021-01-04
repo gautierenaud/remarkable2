@@ -74,10 +74,17 @@ Had to rewrite call to requests with mechanize's implementation, since the pytho
 
 ## TODOs for plugin
 
-* move api calls to worker script, so I don't block the interface
 * remember a correspondance of the files on the remarkable, i.e. put the id of the remarkable file in calibre's metadata (and version)
 * don't push the same book twice
 * check version of remarkable file, pull changes if there are any changes (e.g. notes on the files)
 * create a column/icon to show which books are on remarkable/under upload/under upload
 * take in account a default location (e.g. Books/book_to_upload)
 * pull remarkable created files ? such as notes (con: they are not books, so technically nothing to do in calibre)
+
+Done:
+* move api calls to worker script, so I don't block the interface
+
+Notes for TODOs:
+* Can put the same book again and again -> because the ids are generated each time, generating one from the file name (?) may allow to avoid duplicate (at least coming from the same source)
+* reMarkable's Cloud seems to remember all previously uploaded items, including the one deleted from the reMarkable -> set this plugin as the single source of truth ? -> does not seem to be a good idea, since multiple source is a strength for me
+* for folders, will have to check from all objects in the cloud and retrace the whole path to see if we need to create new folders or not (to differentiate between `books/` and `perso/books/` for example). What about folders that does not exist on the tablet anymore ?

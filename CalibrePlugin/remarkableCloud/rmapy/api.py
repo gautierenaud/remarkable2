@@ -4,10 +4,10 @@ from logging import getLogger
 from typing import Optional, Union
 from uuid import uuid4
 
+from calibre_plugins.remarkable_cloud.config import dump, load
 from mechanize import Request
 
 from .collections import Collection
-from .config import dump, load
 from .const import (BASE_URL, DEVICE, DEVICE_TOKEN_URL, USER_AGENT,
                     USER_TOKEN_URL, RFC3339Nano)
 from .document import Document, ZipDocument, from_request_stream
