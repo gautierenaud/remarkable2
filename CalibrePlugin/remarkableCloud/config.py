@@ -38,3 +38,6 @@ class ConfigWidget(QWidget):
             rm_client = Client()
             return rm_client.register_device(self.registration_code.text())
         return True
+    
+    def save_settings(self):
+        pass

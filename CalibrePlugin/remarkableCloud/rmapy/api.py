@@ -136,7 +136,7 @@ class Client(object):
             "deviceDesc": DEVICE,
             "deviceID": uuid,
         }
-        response = self.request("POST", DEVICE_TOKEN_URL, data=body)
+        response = self.request("POST", DEVICE_TOKEN_URL, data=json.dumps(body), headers={"Content-type": "application/json"})
         if response.ok:
             self.token_set["devicetoken"] = response.text
             dump(self.token_set)

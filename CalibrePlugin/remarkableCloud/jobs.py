@@ -22,3 +22,4 @@ def upload_books(books, db, log=None, abort=None, notifications=True):
         zip_doc = ZipDocument(doc=file_path)
         rm_client.upload(zip_doc)
         print(zip_doc.ID)
+
