@@ -15,7 +15,6 @@ import sys
 import time
 
 from calibre.devices.usbms.device import Device
-
 from calibre_plugins.remarkable_cloud_driver.config import config, ConfigWidget, dump
 
 logger = logging.getLogger("mechanize")
@@ -156,6 +155,7 @@ class RemarkableCloudDriver(Device):
 
             if doc.ID in config['match_cache']:
                 b.uuid = config['match_cache'][doc.ID][0]
+                b.authors = config['match_cache'][doc.ID][1]
 
             b.device_collections = [get_full_hierarchy(doc.Parent)]
             booklist.add_book(b, replace_metadata=True)
@@ -264,6 +264,7 @@ class RemarkableCloudDriver(Device):
 
 
 from calibre.ebooks.metadata.book.base import Metadata
+from calibre.ebooks.metadata import title_sort, author_to_author_sort
 
 
 class Book(Metadata):
@@ -277,5 +278,14 @@ class Book(Metadata):
         self.path = rm_id
         self.authors = authors
 
+        self.author_sort = author_to_author_sort(self.authors)
+
     def __eq__(self, other):
         return self.rm_id == getattr(other, 'rm_id', None)
+
+    @property
+    def title_sorter(self):
+        ans = getattr(self, 'title_sort', None)
+        if not ans or self.is_null('title_sort') or ans == _('Unknown'):
+            ans = ''
+        return ans or title_sort(self.title or '')

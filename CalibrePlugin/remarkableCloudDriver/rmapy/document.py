@@ -313,7 +313,6 @@ class ZipDocument(object):
                 pass
 
             # Get the RM pages
-
             pages = [x for x in zf.namelist()
                      if x.startswith(f"{self.ID}/") and x.endswith('.rm')]
             for p in pages:
@@ -322,13 +321,21 @@ class ZipDocument(object):
                 with zf.open(p, 'r') as rm:
                     page = BytesIO(rm.read())
                     page.seek(0)
-                with zf.open(p.replace(".rm", "-metadata.json"), 'r') as md:
-                    metadata = json.load(md)
+
+                p_meta = p.replace(".rm", "-metadata.json")
+                try:
+                    with zf.open(p_meta, 'r') as md:
+                        metadata = json.load(md)
+                except KeyError:
+                    metadata = None
                 thumbnail_name = p.replace(".rm", ".jpg")
                 thumbnail_name = thumbnail_name.replace("/", ".thumbnails/")
-                with zf.open(thumbnail_name, 'r') as tn:
-                    thumbnail = BytesIO(tn.read())
-                    thumbnail.seek(0)
+                try:
+                    with zf.open(thumbnail_name, 'r') as tn:
+                        thumbnail = BytesIO(tn.read())
+                        thumbnail.seek(0)
+                except KeyError:
+                    thumbnail = None
 
                 self.rm.append(RmPage(page, metadata, page_number, thumbnail,
                                       self.ID))
