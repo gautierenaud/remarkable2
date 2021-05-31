@@ -36,6 +36,8 @@ class RemarkableCloudDriver(Device):
 
     MANAGES_DEVICE_PRESENCE = True
 
+    CAN_SET_METADATA = ['title', 'authors', 'collections']
+
     def __init__(self, args):
         super().__init__(args)
         self.report_progress = lambda x, y: None
