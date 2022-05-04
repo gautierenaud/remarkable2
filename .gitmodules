@@ -1,0 +1,3 @@
+[submodule "CalibrePlugin/remarkableSSHDriver/scripts"]
+	path = CalibrePlugin/remarkableSSHDriver/scripts
+	url = git@github.com:reHackable/scripts.git

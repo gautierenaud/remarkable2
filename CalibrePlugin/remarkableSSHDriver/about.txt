@@ -1,0 +1,7 @@
+The Remarkable Cloud Plugin
+===========================
+
+Created by Renaud Tamon Gautier
+
+Requires calibre >= 5.6.0
+
