@@ -5,6 +5,7 @@ Useful links:
 * [remarkable github](https://github.com/reMarkable)
 * [hack on RM2](https://github.com/reHackable/awesome-reMarkable)
 * [dev on remarkable 1](https://dragly.org/2017/12/01/developing-for-the-remarkable/)
+* [convert rm to svg](https://www.ucl.ac.uk/~ucecesf/remarkable/rm2svg.py)
 
 # Connect to it
 

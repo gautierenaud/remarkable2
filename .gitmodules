@@ -1,3 +1,0 @@
-[submodule "CalibrePlugin/calibre"]
-	path = CalibrePlugin/calibre
-	url = https://github.com/kovidgoyal/calibre.git

@@ -15,6 +15,8 @@ from .exceptions import (ApiError, AuthError, DocumentNotFound,
                          UnsupportedTypeError)
 from .folder import Folder
 
+import http
+
 log = getLogger("rmapy")
 DocumentOrFolder = Union[Document, Folder]
 

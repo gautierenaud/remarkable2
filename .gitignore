@@ -1,8 +1,11 @@
 # IDE
 .vscode/
+.idea/
 
 # images (ignored by default)
 *.png
 *.svg
 
 venv/
+
+rmapy_test/

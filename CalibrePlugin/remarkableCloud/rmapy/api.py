@@ -18,6 +18,8 @@ from .folder import Folder
 log = getLogger("rmapy")
 DocumentOrFolder = Union[Document, Folder]
 
+import http
+
 
 class Response():
     def __init__(self, r):
