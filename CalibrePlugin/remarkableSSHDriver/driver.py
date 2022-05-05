@@ -9,13 +9,15 @@ Driver for remarkable 2 tablets, but using the cloud api provided by remarkable.
 not tested.
 '''
 
+from base64 import decode
 import inspect
 import logging
 import sys
 import time
+import subprocess
+import re
 
 from calibre.devices.usbms.device import Device
-from calibre_plugins.remarkable_ssh_driver.config import config, ConfigWidget, dump
 
 logger = logging.getLogger("mechanize")
 logger.addHandler(logging.StreamHandler(sys.stdout))
@@ -23,9 +25,9 @@ logger.setLevel(logging.DEBUG)
 
 
 class RemarkableSSHDriver(Device):
-    name = 'Remarkable 2 Cloud Interface'
+    name = 'Remarkable 2 SSH Interface'
     gui_name = 'Remarkable 2'
-    description = _('Communicate with Remarkable\'s Cloud API')
+    description = _('Communicate with Remarkable\'s through ssh')
     author = 'Renaud Tamon GAUTIER'
     version = (0, 0, 1)
 
@@ -47,54 +49,29 @@ class RemarkableSSHDriver(Device):
         self.ignore_books = set()
 
     def startup(self):
-        from calibre_plugins.remarkable_ssh_driver.rmapy.api import Client
-        self.rm_client = Client()
-        # debug
-        if self.rm_client.is_auth():
-            logger.debug('authenticated')
-        else:
-            logger.debug('not authenticated')
-
-        # had to init by hand, the default value will not make match_cache appear.
-        if not config['match_cache']:
-            config['match_cache'] = {}
-
-    def is_customizable(self):
-        return True
-
-    def config_widget(self):
-        # from calibre_plugins.remarkable_ssh_driver.config import ConfigWidget
-        return ConfigWidget(self.rm_client)
-
-    def save_settings(self, config_widget):
-        config_widget.save_settings()
+        print('Hello there')
 
     def detect_managed_devices(self, devices_on_system, force_refresh=False):
-        # TODO: should be registered through plugin settings, display a message ?
-        if not self.rm_client.is_registered():
-            return None
-
-        if not self.rm_client.is_auth():
-            self.rm_client.renew_token()
-
-        return self if self.rm_client.is_auth() else None
+        return self
 
     def debug_managed_device_detection(self, devices_on_system, output):
-        if self.rm_client.is_auth():
-            from calibre_plugins.remarkable_ssh_driver.rmapy.const import DEVICE, USER_AGENT
-            output.write(f'Connected to remarkable cloud as: {DEVICE}, {USER_AGENT}')
-            return True
         return False
 
     def open(self, connected_device, library_uuid):
         # since it is a connection to a cloud, nothing to be done here
-        logger.debug('open remarkable device')
+        print('open remarkable device')
+        ret = subprocess.run(['ssh', '-o', 'ConnectTimeout=5', '-M', '-S', 'calibre-remarkable-ssh', '-q', '-f', 'root@10.11.99.1', '-N']).returncode
+        if ret == 0:
+            print('ssh socker is open')
+        else:
+            raise Exception('ssh connection error')
+        # subprocess.run(['ssh', 'root@10.11.99.1', 'ls'])
 
     def set_progress_reporter(self, report_progress):
         self.report_progress = report_progress
 
     def get_device_information(self, end_session=True):
-        return 'remarkable cloud', '0.0.1', 'whatever', ''
+        return 'remarkable ssh', '0.0.1', 'whatever', ''
 
     def is_running(self):
         print('#######' + inspect.currentframe().f_code.co_name)
@@ -131,35 +108,25 @@ class RemarkableSSHDriver(Device):
         if oncard:
             return booklist
 
-        self.rm_client.renew_token()
-        meta_items = self.rm_client.get_meta_items()
-        folders = filter(lambda x: x.Type == 'CollectionType', meta_items)
-        documents = filter(lambda x: x.Type == 'DocumentType', meta_items)
+        res = subprocess.run(['ssh', '-S', 'calibre-remarkable-ssh', 'root@10.11.99.1', 'find /home/root/.local/share/remarkable/xochitl/ -type f -name "*.metadata" -exec grep -qw "DocumentType" {} \; -exec grep "visibleName" {} \; -print'], capture_output=True)
 
-        doc_hierarchy = {folder.ID: (folder.VissibleName, folder.Parent) for folder in folders}
+        raw_output = res.stdout
 
-        def get_full_hierarchy(parent_id):
-            full_path = doc_hierarchy[parent_id][0] if parent_id in doc_hierarchy else ""
-            parent_id = doc_hierarchy[parent_id][1] if parent_id in doc_hierarchy else None
-            while parent_id in doc_hierarchy:
-                full_path = doc_hierarchy[parent_id][0] + '/' + full_path
-                parent_id = doc_hierarchy[parent_id][1]
-            return full_path
+        decoded = raw_output.decode('utf8').strip().split('\n')
+        if not decoded or len(decoded) % 2 != 0:
+            print("Wrong entry number: ", len(decoded))
+            return booklist
+        
+        raw_entries = list(zip(decoded[0::2], decoded[1::2]))
+        for raw_name, raw_id in raw_entries:
+            name_search = re.search('"visibleName": "(.*)"', raw_name)
+            name = name_search.group(1)
 
-        for doc in documents:
-            if doc.ID in self.ignore_books:
-                continue
+            id_search = re.search('/home/root/\.local/share/remarkable/xochitl/(.*)\.metadata', raw_id)
+            id = id_search.group(1)
 
-            # very ugly hack, but the date has variable size (sometime millisec is missing) and is timezoned
-            datetime = time.strptime(doc.ModifiedClient.split('.')[0].replace('Z', ''), '%Y-%m-%dT%H:%M:%S')
+            b = Book(title=name, rm_id=id)
 
-            b = Book(title=doc.VissibleName, rm_id=doc.ID, datetime=datetime)
-
-            if doc.ID in config['match_cache']:
-                b.uuid = config['match_cache'][doc.ID][0]
-                b.authors = config['match_cache'][doc.ID][1]
-
-            b.device_collections = [get_full_hierarchy(doc.Parent)]
             booklist.add_book(b, replace_metadata=True)
 
         print('booklist:', booklist)
@@ -175,21 +142,19 @@ class RemarkableSSHDriver(Device):
         if on_card:
             return ids()
 
-        self.rm_client.renew_token()
+        # from calibre_plugins.remarkable_cloud_driver.rmapy.document import ZipDocument
+        # for i, file in enumerate(files):
+        #     if metadata and metadata[i].get('title'):
+        #         display_name = metadata[i].get('title')
+        #     else:
+        #         import os
+        #         display_name = os.path.splitext(os.path.basename(names[i]))[0]
 
-        from calibre_plugins.remarkable_ssh_driver.rmapy.document import ZipDocument
-        for i, file in enumerate(files):
-            if metadata and metadata[i].get('title'):
-                display_name = metadata[i].get('title')
-            else:
-                import os
-                display_name = os.path.splitext(os.path.basename(names[i]))[0]
+        #     zip_doc = ZipDocument(doc=file, display_name=display_name)
+        #     # TODO: add errors in case of failure
+        #     r = self.rm_client.upload(zip_doc)
 
-            zip_doc = ZipDocument(doc=file, display_name=display_name)
-            # TODO: add errors in case of failure
-            r = self.rm_client.upload(zip_doc)
-
-            ids.append(zip_doc.ID)
+        #     ids.append(zip_doc.ID)
 
         return ids
 
@@ -233,8 +198,8 @@ class RemarkableSSHDriver(Device):
                 if book.uuid and book.rm_id not in config['match_cache']:
                     config['match_cache'][book.rm_id] = (book.uuid, book.authors)
 
-        # TODO: more readable name for saving config
-        dump()
+        # # TODO: more readable name for saving config
+        # dump()
 
     def get_file(self, path, outfile, end_session=True):
         print('#######' + inspect.currentframe().f_code.co_name)
@@ -253,9 +218,14 @@ class RemarkableSSHDriver(Device):
         return opts
 
     def get_device_uid(self):
-        print('###########"""get_device_uid ')
-        # there is no device per se, soooooo device token as uid ?
-        return config['devicetoken']
+        print('get_device_uid...')
+
+        res = subprocess.run(['ssh', '-S', 'calibre-remarkable-ssh', 'root@10.11.99.1', 'cat /etc/machine-id'], capture_output=True)
+        id = res.stdout.decode('utf-8').strip()
+        
+        print('id is:', id)
+
+        return id
 
     def ignore_connected_device(self, uid):
         print('#######' + inspect.currentframe().f_code.co_name)

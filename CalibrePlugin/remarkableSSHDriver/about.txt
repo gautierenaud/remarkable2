@@ -1,4 +1,4 @@
-The Remarkable Cloud Plugin
+The Remarkable SSH Plugin
 ===========================
 
 Created by Renaud Tamon Gautier
