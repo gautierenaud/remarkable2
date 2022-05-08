@@ -2,8 +2,8 @@ import subprocess
 import re
 import http.client
 from datetime import datetime
-import time
 import json
+from collections import deque
 
 RM_IP='10.11.99.1'
 RM_TUNNEL='calibre-remarkable-ssh'
@@ -30,25 +30,34 @@ def get_free_space():
 
 date_time_str = '%Y-%m-%dT%H:%M:%S.%f'
 def get_books():
-    # http is implied, no need to use RM_WEBUI
-    h1 = http.client.HTTPConnection(RM_IP)
-    h1.request('POST', '/documents/', headers={'Accept': '*/*', 'Accept-Encoding': 'gzip, deflate', 'Connection': 'keep-alive'})
-    res = h1.getresponse()
-    if res.status != 200:
-        raise Exception('could not retrieve book info', res.reason)
-    
-    raw_body = res.read().decode()
-    json_body = json.JSONDecoder().decode(raw_body)
+    done_collections = set()
+    collection_queue = deque([''])
 
     books = []
-    for entry in json_body:
-        if entry['Type'] == 'DocumentType':
-            date = datetime.fromisoformat(entry['ModifiedClient'].split('.', 1)[0])
+    while collection_queue:
+        collection = collection_queue.pop()
+        done_collections.add(collection)
 
-            authors = []
-            if entry['documentMetadata'] and entry['documentMetadata']['authors'] and entry['documentMetadata']['authors'] != ['null']:
-                authors = entry['documentMetadata']['authors']
-            books.append((entry['VissibleName'], entry['ID'], date.timetuple(), int(entry['sizeInBytes']), authors))
+        # http is implied, no need to use RM_WEBUI
+        h1 = http.client.HTTPConnection(RM_IP)
+        h1.request('POST', f'/documents/{collection}', headers={'Accept': '*/*', 'Accept-Encoding': 'gzip, deflate', 'Connection': 'keep-alive'})
+        res = h1.getresponse()
+        if res.status != 200:
+            raise Exception('could not retrieve book info', res.reason)
+        
+        raw_body = res.read().decode()
+        json_body = json.JSONDecoder().decode(raw_body)
+
+        for entry in json_body:
+            if entry['Type'] == 'DocumentType':
+                date = datetime.fromisoformat(entry['ModifiedClient'].split('.', 1)[0])
+
+                authors = []
+                if entry['documentMetadata'] and entry['documentMetadata']['authors'] and entry['documentMetadata']['authors'] != ['null']:
+                    authors = entry['documentMetadata']['authors']
+                books.append((entry['VissibleName'], entry['ID'], date.timetuple(), int(entry['sizeInBytes']), authors))
+            elif entry['Type'] == 'CollectionType' and entry['ID'] not in done_collections and entry['ID'] not in collection_queue:
+                collection_queue.append(entry['ID'])
 
     return books
 

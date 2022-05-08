@@ -223,7 +223,6 @@ class Book(Metadata):
         self.authors = authors
 
         self.set('size', size)
-        # self.set('timestamp', 1502022753)
 
         print("aaaaaaaaaaaa", self.print_all_attributes())
 
