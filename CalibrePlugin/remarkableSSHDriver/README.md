@@ -16,10 +16,29 @@ Hints:
         * -> Generate a placeholder ebook with the right title (maybe a unique hash? Or the metadata won't be regenerated...)
             * worst case scenario: just curl the ebook and don't use scp at all
 
+# Known issues
+
+## ssh error
+
+At some point, the remarkable will become unreachable. I suspect there are too many dangling ssh connections, and the remarkable can not open any.
+
+Rebooting the tablet will remove those dangling connections.
+
+## Index out of Range on Delete
+
+After deleting a file looking on the device's content will trigger several "Index out of range" issue.
+
+I probably need to check lists content for all metadata change methods, to see if there is a missing value.
+
 # Pushing books
+
+## https://github.com/reHackable/scripts's approach
 
 1) put a placeholder through the web interface (`/upload`)
 2) once metadata files are created, scp the whole book and update metadata
+
+Although it is smarter (I guess uploading through http is _slow_), I could not make it work locally. I think I need to generate a proper placeholder.
+For now, waiting for the whole http request to complete is ok for me.
 
 ## Tests
 

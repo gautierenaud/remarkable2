@@ -10,6 +10,7 @@ not tested.
 '''
 
 from base64 import decode
+import collections
 from datetime import date
 import inspect
 import logging
@@ -104,17 +105,17 @@ class RemarkableSSHDriver(Device):
             return booklist
 
         books = get_books()
-        for name, id, date, size, authors in books:
-            b = Book(title=name, rm_id=id, size=size, authors=authors, datetime=date)
+        for name, id, date, size, authors, collections in books:
+            b = Book(title=name, rm_id=id, size=size, authors=authors, datetime=date, collections=collections)
 
             # If we have a correspondance in cache, we retrieve data from it (it will help calibre find correspondances)
             if id in config['match_cache']:
                 b.uuid = config['match_cache'][id][0]
-                b.authors = config['match_cache'][id][1]
+                if not b.authors:
+                    b.authors = config['match_cache'][id][1]
 
             booklist.add_book(b, replace_metadata=True)
 
-        print('booklist:', booklist)
         return booklist
 
     def upload_books(self, files, names, on_card=None, end_session=True, metadata=None):
@@ -127,8 +128,9 @@ class RemarkableSSHDriver(Device):
         if on_card:
             return ids()
 
-        for i, file in enumerate(files):
-            upload_book(file)
+        for name, file in zip(names, files):
+            id = upload_book(name, file)
+            ids.append(id)
 
         return ids
 
@@ -138,23 +140,17 @@ class RemarkableSSHDriver(Device):
         print(locations)
         print(metadata)
         print(booklists)
-        for i, rm_id in enumerate(locations):
-            metadata[i].set('rm_id', rm_id)
-            config['match_cache'][rm_id] = (metadata[i].uuid, metadata[i].authors)
-        
-        dump()
+        for rm_id, meta in zip(locations, metadata):
+            b = Book(title=meta.title, rm_id=rm_id, other=meta)
+            booklists[0].add_book(b, replace_metadata=False)
 
     def delete_books(self, paths, end_session=True):
         print('#######' + inspect.currentframe().f_code.co_name)
-        print(paths)
         remove_books(paths)
 
     @classmethod
     def remove_books_from_metadata(cls, paths, booklists):
         print('#######' + inspect.currentframe().f_code.co_name)
-        print(paths)
-        print(booklists)
-        # TODO: use a dictionnary for the book for faster lookup ?
         for booklist in booklists:
             for book in booklist:
                 if book.rm_id in paths:
@@ -171,7 +167,7 @@ class RemarkableSSHDriver(Device):
                 if book.uuid and book.rm_id not in config['match_cache']:
                     config['match_cache'][book.rm_id] = (book.uuid, book.authors)
 
-        dump()
+        # dump()
 
     def get_file(self, path, outfile, end_session=True):
         print('#######' + inspect.currentframe().f_code.co_name)
@@ -213,20 +209,22 @@ from calibre.ebooks.metadata import title_sort, author_to_author_sort
 
 class Book(Metadata):
 
-    def __init__(self, title, rm_id, authors=[], size=0, tags=[], other=None, datetime=time.gmtime()):
+    def __init__(self, title, rm_id, authors=[], size=0, tags=[], other=None, datetime=time.gmtime(), collections=[]):
         super().__init__(title, authors=authors, other=other)
         self.rm_id = rm_id
-        self.datetime = datetime
-        self.size = size
-        self.tags = tags
         self.path = rm_id
-        self.authors = authors
-
-        self.set('size', size)
-
-        print("aaaaaaaaaaaa", self.print_all_attributes())
-
+        self.datetime = datetime
         self.author_sort = author_to_author_sort(self.authors)
+
+        if size:
+            self.size = size
+        if tags:
+            self.tags = tags
+        if authors:
+            self.authors = authors
+        if collections:
+            self.device_collections = collections
+
 
     def __eq__(self, other):
         return self.rm_id == getattr(other, 'rm_id', None)

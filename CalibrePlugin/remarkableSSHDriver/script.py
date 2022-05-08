@@ -33,6 +33,8 @@ def get_books():
     done_collections = set()
     collection_queue = deque([''])
 
+    collection_name = {}
+
     books = []
     while collection_queue:
         collection = collection_queue.pop()
@@ -52,18 +54,27 @@ def get_books():
             if entry['Type'] == 'DocumentType':
                 date = datetime.fromisoformat(entry['ModifiedClient'].split('.', 1)[0])
 
+                device_collections = []
+                if entry['Parent']:
+                    device_collections.append(collection_name[entry['Parent']])
+
                 authors = []
                 if entry['documentMetadata'] and entry['documentMetadata']['authors'] and entry['documentMetadata']['authors'] != ['null']:
                     authors = entry['documentMetadata']['authors']
-                books.append((entry['VissibleName'], entry['ID'], date.timetuple(), int(entry['sizeInBytes']), authors))
+
+                books.append((entry['VissibleName'], entry['ID'], date.timetuple(), int(entry['sizeInBytes']), authors, device_collections))
+
             elif entry['Type'] == 'CollectionType' and entry['ID'] not in done_collections and entry['ID'] not in collection_queue:
                 collection_queue.append(entry['ID'])
+                if entry['Parent']:
+                    collection_name[entry['ID']] = collection_name[entry['Parent']] + '/' + entry['VissibleName']
+                else:
+                    collection_name[entry['ID']] = entry['VissibleName']
 
     return books
 
 
 def get_book(name):
-    print("Getting books")
     res = subprocess.run(['ssh', '-S', RM_TUNNEL, RM_SSH, 'find /home/root/.local/share/remarkable/xochitl/ -type f -name "*.metadata" -exec grep -qw "DocumentType" {} \; -exec grep "visibleName" {} \; -print'], capture_output=True)
     
     books = []
@@ -85,13 +96,27 @@ def get_book(name):
     return books
 
 
-def upload_book(file):
+def upload_book(name, file):
+    # the API seems to be state-aware, i.e. it will upload the file where we last looked up.
+    # We reset this location to be the root here.
+    h1 = http.client.HTTPConnection(RM_IP)
+    h1.request('POST', '/documents/', headers={'Accept': '*/*', 'Accept-Encoding': 'gzip, deflate', 'Connection': 'keep-alive'})
+
     res = subprocess.run(['curl', '/dev/null', '--form', f'file=@"{file}"', 'http://10.11.99.1/upload'], capture_output=True)
-    
     decoded = res.stdout.decode('utf8')
     if decoded != '{"status":"Upload successful"}':
         raise Exception('could not upload book at', file, decoded)
     
+    # so we can retrieve the id of the newly created document, just because /upload does not return the id
+    # for now taking the latest one is enough
+    res = subprocess.run(['ssh', '-S', RM_TUNNEL, RM_SSH, f'ls -tp /home/root/.local/share/remarkable/xochitl/*.metadata| grep -v /$ | head -n1'], capture_output=True)
+    res.check_returncode()
+
+    decoded = res.stdout.decode('utf8')
+    id_search = re.search('/home/root/\.local/share/remarkable/xochitl/(.*)\.metadata', decoded)
+    id = id_search.group(1)
+
+    return id
 
 def remove_books(rm_ids):
     for rm_id in rm_ids:
