@@ -10,6 +10,7 @@ not tested.
 '''
 
 from base64 import decode
+from datetime import date
 import inspect
 import logging
 import sys
@@ -17,6 +18,8 @@ import time
 import subprocess
 import re
 
+from calibre_plugins.remarkable_ssh_driver.script import open_tunnel, get_total_space, get_free_space, get_books, upload_book, remove_books
+from calibre_plugins.remarkable_ssh_driver.config import config, dump
 from calibre.devices.usbms.device import Device
 
 logger = logging.getLogger("mechanize")
@@ -33,12 +36,9 @@ class RemarkableSSHDriver(Device):
 
     # only tested on linux though...
     supported_platforms = ['windows', 'osx', 'linux']
-
     FORMATS = ['epub', 'pdf']
-
     MANAGES_DEVICE_PRESENCE = True
-
-    CAN_SET_METADATA = ['title', 'authors', 'collections']
+    CAN_SET_METADATA = []
 
     def __init__(self, args):
         super().__init__(args)
@@ -49,7 +49,9 @@ class RemarkableSSHDriver(Device):
         self.ignore_books = set()
 
     def startup(self):
-        print('Hello there')
+        # had to init by hand, the default value will not make match_cache appear.
+        if not config['match_cache']:
+            config['match_cache'] = {}
 
     def detect_managed_devices(self, devices_on_system, force_refresh=False):
         return self
@@ -58,19 +60,13 @@ class RemarkableSSHDriver(Device):
         return False
 
     def open(self, connected_device, library_uuid):
-        # since it is a connection to a cloud, nothing to be done here
-        print('open remarkable device')
-        ret = subprocess.run(['ssh', '-o', 'ConnectTimeout=5', '-M', '-S', 'calibre-remarkable-ssh', '-q', '-f', 'root@10.11.99.1', '-N']).returncode
-        if ret == 0:
-            print('ssh socker is open')
-        else:
-            raise Exception('ssh connection error')
-        # subprocess.run(['ssh', 'root@10.11.99.1', 'ls'])
+        open_tunnel()
 
     def set_progress_reporter(self, report_progress):
         self.report_progress = report_progress
 
     def get_device_information(self, end_session=True):
+        # TODO: read version with ssh
         return 'remarkable ssh', '0.0.1', 'whatever', ''
 
     def is_running(self):
@@ -93,10 +89,10 @@ class RemarkableSSHDriver(Device):
         return None, None
 
     def total_space(self, end_session=True):
-        return 10e9, 0, 0
+        return get_total_space(), 0, 0
 
     def free_space(self, end_session=True):
-        return 9e9, 0, 0
+        return get_free_space(), 0, 0
 
     def books(self, oncard=None, end_session=True):
         print('#######' + inspect.currentframe().f_code.co_name)
@@ -104,28 +100,17 @@ class RemarkableSSHDriver(Device):
         from calibre.devices.usbms.books import BookList
         booklist = BookList(oncard, None, None)
 
-        # since it is a cloud connection, there is no such thing as memory card
         if oncard:
             return booklist
 
-        res = subprocess.run(['ssh', '-S', 'calibre-remarkable-ssh', 'root@10.11.99.1', 'find /home/root/.local/share/remarkable/xochitl/ -type f -name "*.metadata" -exec grep -qw "DocumentType" {} \; -exec grep "visibleName" {} \; -print'], capture_output=True)
+        books = get_books()
+        for name, id, date, size, authors in books:
+            b = Book(title=name, rm_id=id, size=size, authors=authors, datetime=date)
 
-        raw_output = res.stdout
-
-        decoded = raw_output.decode('utf8').strip().split('\n')
-        if not decoded or len(decoded) % 2 != 0:
-            print("Wrong entry number: ", len(decoded))
-            return booklist
-        
-        raw_entries = list(zip(decoded[0::2], decoded[1::2]))
-        for raw_name, raw_id in raw_entries:
-            name_search = re.search('"visibleName": "(.*)"', raw_name)
-            name = name_search.group(1)
-
-            id_search = re.search('/home/root/\.local/share/remarkable/xochitl/(.*)\.metadata', raw_id)
-            id = id_search.group(1)
-
-            b = Book(title=name, rm_id=id)
+            # If we have a correspondance in cache, we retrieve data from it (it will help calibre find correspondances)
+            if id in config['match_cache']:
+                b.uuid = config['match_cache'][id][0]
+                b.authors = config['match_cache'][id][1]
 
             booklist.add_book(b, replace_metadata=True)
 
@@ -142,19 +127,8 @@ class RemarkableSSHDriver(Device):
         if on_card:
             return ids()
 
-        # from calibre_plugins.remarkable_cloud_driver.rmapy.document import ZipDocument
-        # for i, file in enumerate(files):
-        #     if metadata and metadata[i].get('title'):
-        #         display_name = metadata[i].get('title')
-        #     else:
-        #         import os
-        #         display_name = os.path.splitext(os.path.basename(names[i]))[0]
-
-        #     zip_doc = ZipDocument(doc=file, display_name=display_name)
-        #     # TODO: add errors in case of failure
-        #     r = self.rm_client.upload(zip_doc)
-
-        #     ids.append(zip_doc.ID)
+        for i, file in enumerate(files):
+            upload_book(file)
 
         return ids
 
@@ -167,17 +141,13 @@ class RemarkableSSHDriver(Device):
         for i, rm_id in enumerate(locations):
             metadata[i].set('rm_id', rm_id)
             config['match_cache'][rm_id] = (metadata[i].uuid, metadata[i].authors)
-
-        # TODO: add metadata to booklist
+        
+        dump()
 
     def delete_books(self, paths, end_session=True):
         print('#######' + inspect.currentframe().f_code.co_name)
         print(paths)
-        for rm_id in paths:
-            doc_to_delete = self.rm_client.get_doc(rm_id)
-            deleted = self.rm_client.delete(doc_to_delete)
-            if deleted:
-                self.ignore_books.add(rm_id)
+        remove_books(paths)
 
     @classmethod
     def remove_books_from_metadata(cls, paths, booklists):
@@ -189,6 +159,9 @@ class RemarkableSSHDriver(Device):
             for book in booklist:
                 if book.rm_id in paths:
                     booklist.remove(book)
+                    del config['match_cache'][book.rm_id]
+        
+        dump()
 
     def sync_booklists(self, booklists, end_session=True):
         print('###########"""sync_booklists ')
@@ -198,8 +171,7 @@ class RemarkableSSHDriver(Device):
                 if book.uuid and book.rm_id not in config['match_cache']:
                     config['match_cache'][book.rm_id] = (book.uuid, book.authors)
 
-        # # TODO: more readable name for saving config
-        # dump()
+        dump()
 
     def get_file(self, path, outfile, end_session=True):
         print('#######' + inspect.currentframe().f_code.co_name)
@@ -242,13 +214,18 @@ from calibre.ebooks.metadata import title_sort, author_to_author_sort
 class Book(Metadata):
 
     def __init__(self, title, rm_id, authors=[], size=0, tags=[], other=None, datetime=time.gmtime()):
-        super().__init__(title, authors=authors, other=other)  # should pass title and author
+        super().__init__(title, authors=authors, other=other)
         self.rm_id = rm_id
         self.datetime = datetime
         self.size = size
         self.tags = tags
         self.path = rm_id
         self.authors = authors
+
+        self.set('size', size)
+        # self.set('timestamp', 1502022753)
+
+        print("aaaaaaaaaaaa", self.print_all_attributes())
 
         self.author_sort = author_to_author_sort(self.authors)
 
