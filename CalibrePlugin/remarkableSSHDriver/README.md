@@ -30,6 +30,8 @@ After deleting a file looking on the device's content will trigger several "Inde
 
 I probably need to check lists content for all metadata change methods, to see if there is a missing value.
 
+It seems to happen when I upload and delete several books with the same name.
+
 # Pushing books
 
 ## https://github.com/reHackable/scripts's approach

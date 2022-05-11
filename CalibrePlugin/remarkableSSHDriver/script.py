@@ -28,7 +28,6 @@ def get_free_space():
     res = subprocess.run(['ssh', '-S', RM_TUNNEL, RM_SSH, 'df | grep "/home" | awk -F " " \'{print $4}\''], capture_output=True)
     return int(res.stdout, 10) * 1000
 
-date_time_str = '%Y-%m-%dT%H:%M:%S.%f'
 def get_books():
     done_collections = set()
     collection_queue = deque([''])
@@ -124,3 +123,23 @@ def remove_books(rm_ids):
     
     # restart system so it will forget about the deleted files
     subprocess.run(['ssh', '-S', RM_TUNNEL, RM_SSH, 'systemctl restart xochitl'])
+
+def download_to(target, outfile):
+    def retrieve_file(name):
+        res = subprocess.run(['scp', '-o', f'ControlPath={RM_TUNNEL}', f'{RM_SSH}:/home/root/.local/share/remarkable/xochitl/{name}', f'/tmp/{name}'])
+        if res.returncode != 0:
+            raise Exception(f'Could not download file {name}: {res.returncode}')
+        with open(f'/tmp/{name}', 'rb') as f:
+            outfile.write(f.read())
+        return
+    
+    # first try with epub format
+    res = subprocess.run(['ssh', '-S', RM_TUNNEL, RM_SSH, f'test -e /home/root/.local/share/remarkable/xochitl/{target}.epub'])
+    if res.returncode == 0:
+        return retrieve_file(f'{target}.epub')
+
+    res = subprocess.run(['ssh', '-S', RM_TUNNEL, RM_SSH, f'test -e /home/root/.local/share/remarkable/xochitl/{target}.pdf'])
+    if res.returncode == 0:
+        return retrieve_file(f'{target}.pdf')
+    
+    raise Exception("Could not find supported format (epub & pdf)")

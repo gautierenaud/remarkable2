@@ -19,7 +19,7 @@ import time
 import subprocess
 import re
 
-from calibre_plugins.remarkable_ssh_driver.script import open_tunnel, get_total_space, get_free_space, get_books, upload_book, remove_books
+from calibre_plugins.remarkable_ssh_driver.script import open_tunnel, get_total_space, get_free_space, get_books, upload_book, remove_books, download_to
 from calibre_plugins.remarkable_ssh_driver.config import config, dump
 from calibre.devices.usbms.device import Device
 
@@ -33,7 +33,7 @@ class RemarkableSSHDriver(Device):
     gui_name = 'Remarkable 2'
     description = _('Communicate with Remarkable\'s through ssh')
     author = 'Renaud Tamon GAUTIER'
-    version = (0, 0, 1)
+    version = (0, 0, 2)
 
     # only tested on linux though...
     supported_platforms = ['windows', 'osx', 'linux']
@@ -140,8 +140,9 @@ class RemarkableSSHDriver(Device):
         print(locations)
         print(metadata)
         print(booklists)
+
         for rm_id, meta in zip(locations, metadata):
-            b = Book(title=meta.title, rm_id=rm_id, other=meta)
+            b = Book(title=meta.title, rm_id=rm_id, size=meta.size, other=meta)
             booklists[0].add_book(b, replace_metadata=False)
 
     def delete_books(self, paths, end_session=True):
@@ -173,12 +174,7 @@ class RemarkableSSHDriver(Device):
         print('#######' + inspect.currentframe().f_code.co_name)
         print(path)
         print(outfile)
-        meta = self.rm_client.get_doc(path)
-        book = self.rm_client.download(meta)
-        if book.pdf:
-            outfile.write(book.pdf.read())
-        elif book.epub:
-            outfile.write(book.epub.read())
+        download_to(path, outfile)
 
     @classmethod
     def settings(cls):
@@ -216,8 +212,12 @@ class Book(Metadata):
         self.datetime = datetime
         self.author_sort = author_to_author_sort(self.authors)
 
-        if size:
-            self.size = size
+        if not self.size:
+            if size:
+                self.size = size
+            else:
+                self.size = 0
+            
         if tags:
             self.tags = tags
         if authors:
